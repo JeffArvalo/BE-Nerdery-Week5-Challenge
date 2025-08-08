@@ -22,7 +22,8 @@ npm i
 ```
 
 3. Create the .env file with your credentials
-```bash 
+
+```bash
 DATABASE_URL="postgresql://username:password@localhost:5432/database"
 ```
 
@@ -31,6 +32,7 @@ DATABASE_URL="postgresql://username:password@localhost:5432/database"
 ```bash
 npx prisma generate
 ```
+
 If you are using an unexisting database use this command to create the database and migrate Prisma:
 
 ```bash
@@ -41,4 +43,29 @@ npx prisma migrate dev --name init
 
 ```bash
 npm run dev
+```
+
+## Mocking Data
+
+```bash
+npx prisma db seed
+```
+
+this will create two user in prisma/seed.ts:
+
+```bash
+[
+    {
+        name: 'Alice',
+        email: 'alice@example.com',
+        password: '1234',
+        role: 'user'
+    },
+    {
+        name: 'Bob',
+        email: 'bob@example.com',
+        password: 'password',
+        role: 'admin'
+    }
+]
 ```
