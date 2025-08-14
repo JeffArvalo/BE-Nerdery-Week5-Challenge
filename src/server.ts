@@ -2,12 +2,14 @@ import express from "express";
 import "reflect-metadata";
 import { router } from "./router";
 import session from "express-session";
+import dotenv from 'dotenv'
 
+dotenv.config()
 const app = express();
 app.use(express.json());
 app.use(
   session({
-    secret: "a8d51d1d6fe5ea8d6e590e8dd2da426d",
+    secret: process.env.SECRET as any,
     resave: true,
     saveUninitialized: true,
   })

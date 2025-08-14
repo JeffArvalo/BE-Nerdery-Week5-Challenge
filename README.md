@@ -25,6 +25,8 @@ npm i
 
 ```bash
 DATABASE_URL="postgresql://username:password@localhost:5432/database"
+SECRET="SECRET"
+SECRET_KEY="SECRET_KEY"
 ```
 
 4. Generate Prisma Schema:

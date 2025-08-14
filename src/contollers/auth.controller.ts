@@ -5,6 +5,7 @@ import { validate } from "class-validator";
 import { AuthService } from "../services/auth.service";
 import { SignInDto } from "../dtos/auth/requests/signin.dto";
 import { UserDto } from "../dtos/auth/responses/user.dto";
+import { ForgotPasswordDto } from "../dtos/auth/requests/forgot-password.dto";
 
 declare module "express-session" {
   interface SessionData {
@@ -61,7 +62,7 @@ export async function signin(req: Request, res: Response): Promise<void> {
     const result = await AuthService.signin(dto);
     req.session.user = result;
     res.status(200).json(result);
-	return;
+    return;
   } catch (error: unknown) {
     if (error instanceof Error) {
       const statusCode = (error as any).statusCode || 500;
@@ -113,18 +114,37 @@ export async function signout(req: Request, res: Response): Promise<void> {
   }
 }
 
-export async function forgotPassword(req: Request, res: Response): Promise<void> {
-  const { email } = req.body;
-  const userToken = await AuthService.forgotPassword(email);
-  res.status(200).json({ message: "Password reset token generated.", token: userToken });
+export async function forgotPassword(
+  req: Request,
+  res: Response
+): Promise<void> {
+  const dto = plainToInstance(ForgotPasswordDto, req.body);
+  const errors = await validate(dto);
+
+  if (errors.length > 0) {
+    res.status(400).send({ message: "Validation failed", details: errors });
+    return;
+  }
+
+  const userToken = await AuthService.forgotPassword(dto.email);
+  res
+    .status(200)
+    .json({ message: "Password reset token generated.", token: userToken });
 }
 
-export async function resetPassword(req: Request, res: Response): Promise<void> {
-  const { token, password } = req.body;
+export async function resetPassword(
+  req: Request,
+  res: Response
+): Promise<void> {
+  const { token } = req.query;
+  const { password } = req.body;
   try {
-    await AuthService.resetPassword(token, password);
+    await AuthService.resetPassword(token as string, password);
     res.status(200).json({ message: "Password reset successful." });
-  } catch {
-    res.status(400).json({ message: "Invalid or expired token." });
+  } catch (error: any) {
+    res.status(400).json({
+      message: error.message || "Invalid or expired token.",
+      name: error.name || "Error",
+    });
   }
 }

@@ -2,28 +2,33 @@ import { SignUpDto } from "../dtos/auth/requests/signup.dto";
 import { plainToInstance } from "class-transformer";
 import { UserDto } from "../dtos/auth/responses/user.dto";
 import { Conflict, Unauthorized } from "http-errors";
-import crypto from "crypto";
+import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
+import { Prisma } from "@prisma/client";
 import prisma from "../prisma";
 import { SignInDto } from "../dtos/auth/requests/signin.dto";
 
+const secretKey = process.env.SECRET_KEY || "";
+
 export class AuthService {
   static async signup(body: SignUpDto): Promise<UserDto> {
-    const exists = await prisma.user.findUnique({
-      where: { email: body.email },
-    });
+    try {
+      const password = await bcrypt.hash(body.password, 10);
+      const user = await prisma.user.create({
+        data: { ...body, password: password },
+      });
 
-    if (exists) {
-      throw new Conflict("User with this email already exists");
+      return plainToInstance(UserDto, user, {
+        excludeExtraneousValues: true,
+      });
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError) {
+        if (e.code === "P2002") {
+          throw new Conflict("User with this email already exists. ");
+        }
+      }
+      throw e;
     }
-    const password = await bcrypt.hash(body.password, 10);
-    const user = await prisma.user.create({
-      data: { ...body, password: password },
-    });
-
-    return plainToInstance(UserDto, user, {
-      excludeExtraneousValues: true,
-    });
   }
 
   static async signin(body: SignInDto): Promise<UserDto> {
@@ -39,42 +44,52 @@ export class AuthService {
   }
 
   static async forgotPassword(email: string): Promise<string> {
-    const user = await prisma.user.findUnique({ where: { email } });
-    if (!user) {
-      throw new Conflict("User with this email not exists");
+    try {
+      const token = jwt.sign({ email }, secretKey, { expiresIn: "15m" });
+
+      await prisma.user.update({
+        where: { email },
+        data: {
+          resetPasswordToken: token,
+        },
+      });
+
+      return token;
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError) {
+        if (e.code === "P2025") {
+          throw new Conflict("User with this email not exists.");
+        }
+      }
+      throw e;
     }
-
-    const token = crypto.randomBytes(32).toString("hex");
-
-    await prisma.user.update({
-      where: { email },
-      data: {
-        resetPasswordToken: token,
-      },
-    });
-
-    return token;
   }
 
   static async resetPassword(
     token: string,
     newPassword: string
   ): Promise<void> {
-    const user = await prisma.user.findFirst({
-      where: {
-        resetPasswordToken: token,
-      },
-    });
+    const payload: any = jwt.verify(token, secretKey, (err, payload) => {
+      if (err) throw err;
 
-    if (!user) throw new Unauthorized("Invalid or expired token");
-
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
-    await prisma.user.update({
-      where: { id: user.id },
-      data: {
-        password: hashedPassword,
-        resetPasswordToken: null,
-      },
+      return payload;
     });
+    try {
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+      await prisma.user.update({
+        where: { email: payload.email, resetPasswordToken: token },
+        data: {
+          password: hashedPassword,
+          resetPasswordToken: null,
+        },
+      });
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError) {
+        if (e.code === "P2025") {
+          throw new Conflict("Password reset failed: user not found with this token");
+        }
+      }
+      throw e;
+    }
   }
 }
